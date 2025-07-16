@@ -5,6 +5,7 @@ import { Node, Edge, CanvasState, ViewportState, Point, NodeType, HistoryState }
 interface CanvasStore extends CanvasState {
   // Node operations
   addNode: (type: NodeType, position: Point) => void;
+  addTextNode: (textNode: any) => void;
   updateNode: (id: string, updates: Partial<Node>) => void;
   deleteNode: (id: string) => void;
   selectNode: (id: string, multiSelect?: boolean) => void;
@@ -77,6 +78,27 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       fill: '#ffffff',
       stroke: '#666666',
       strokeWidth: 2,
+    };
+    
+    set((state) => ({
+      nodes: [...state.nodes, node],
+      selectedNodes: [node.id],
+      selectedEdges: [],
+    }));
+    
+    get().saveHistory();
+  },
+
+  addTextNode: (textNode: any) => {
+    const node: Node = {
+      id: uuidv4(),
+      type: 'text' as NodeType,
+      position: textNode.position,
+      size: { width: 100, height: 30 },
+      text: textNode.text,
+      fill: textNode.fill,
+      stroke: 'transparent',
+      strokeWidth: 0,
     };
     
     set((state) => ({

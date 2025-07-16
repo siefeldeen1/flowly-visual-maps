@@ -72,14 +72,20 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({ node, isSelected }) => {
   const handleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true;
     
-    if (isConnecting && connectionSource !== node.id) {
+    const currentTool = useCanvasStore.getState().tool;
+    
+    if (currentTool === 'line' && !isConnecting) {
+      // Start connection from this node
+      startConnection(node.id);
+    } else if (isConnecting && connectionSource !== node.id) {
+      // Complete connection to this node
       endConnection(node.id);
     } else if (e.evt.ctrlKey || e.evt.metaKey) {
       selectNode(node.id, true);
     } else {
       selectNode(node.id);
     }
-  }, [isConnecting, connectionSource, node.id, endConnection, selectNode]);
+  }, [isConnecting, connectionSource, node.id, endConnection, selectNode, startConnection]);
 
   const handleDoubleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true;
@@ -133,6 +139,10 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({ node, isSelected }) => {
     };
 
     switch (node.type) {
+      case 'text':
+        // For text nodes, don't render a background shape
+        return null;
+      
       case 'rectangle':
         return <Rect {...shapeProps} cornerRadius={4} />;
       

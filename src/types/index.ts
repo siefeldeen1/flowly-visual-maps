@@ -1,4 +1,4 @@
-export type NodeType = 'rectangle' | 'ellipse' | 'diamond';
+export type NodeType = 'rectangle' | 'ellipse' | 'diamond' | 'text';
 
 export interface Point {
   x: number;

@@ -55,8 +55,10 @@ export const AppLayout: React.FC = () => {
         </div>
 
         {/* Right panel */}
-        <div className="shrink-0 border-l border-border">
-          <PropertyPanel />
+        <div className="shrink-0 border-l border-border overflow-hidden">
+          <div className="h-full overflow-y-auto">
+            <PropertyPanel />
+          </div>
         </div>
       </div>
     </div>

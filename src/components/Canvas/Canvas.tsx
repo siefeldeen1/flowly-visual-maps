@@ -95,16 +95,35 @@ export const Canvas: React.FC<CanvasProps> = ({ width, height }) => {
         const clickedOnEmpty = e.target === stage;
         
         if (clickedOnEmpty) {
-          if (!e.evt.ctrlKey && !e.evt.metaKey) {
+          // If holding Ctrl/Cmd, start panning instead of selection
+          if (e.evt.ctrlKey || e.evt.metaKey) {
+            setPanning(true);
+          } else {
             clearSelection();
+            startSelectionBox(worldPos);
           }
-          startSelectionBox(worldPos);
         }
       }
     } else if (tool === 'rectangle' || tool === 'ellipse' || tool === 'diamond') {
       addNode(tool, worldPos);
+    } else if (tool === 'text') {
+      // Add text node
+      const textNode = {
+        id: Date.now().toString(),
+        type: 'text' as const,
+        position: worldPos,
+        text: 'Click to edit',
+        fontSize: 16,
+        fill: 'hsl(var(--foreground))',
+      };
+      useCanvasStore.getState().addTextNode(textNode);
+    } else if (tool === 'line' && !isConnecting) {
+      // When line tool is active, clicking starts connection mode
+      // This will be handled by node clicks to start connections
     }
   }, [tool, viewport, setPanning, clearSelection, startSelectionBox, addNode]);
+
+  const lastMousePos = useRef<Point | null>(null);
 
   const handleStageMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (!stageRef.current) return;
@@ -113,12 +132,10 @@ export const Canvas: React.FC<CanvasProps> = ({ width, height }) => {
     const pos = stage.getPointerPosition();
     if (!pos) return;
 
-    if (isPanning) {
-      const newPos = {
-        x: pos.x - (stage.getPointerPosition()?.x || 0),
-        y: pos.y - (stage.getPointerPosition()?.y || 0),
-      };
-      pan(newPos);
+    if (isPanning && lastMousePos.current) {
+      const deltaX = pos.x - lastMousePos.current.x;
+      const deltaY = pos.y - lastMousePos.current.y;
+      pan({ x: deltaX, y: deltaY });
     } else if (selectionBox?.active) {
       const worldPos = {
         x: (pos.x - viewport.x) / viewport.scale,
@@ -126,10 +143,13 @@ export const Canvas: React.FC<CanvasProps> = ({ width, height }) => {
       };
       updateSelectionBox(worldPos);
     }
+
+    lastMousePos.current = pos;
   }, [isPanning, selectionBox, viewport, pan, updateSelectionBox]);
 
   const handleStageMouseUp = useCallback(() => {
     setPanning(false);
+    lastMousePos.current = null;
     
     if (selectionBox?.active) {
       endSelectionBox();
@@ -157,25 +177,47 @@ export const Canvas: React.FC<CanvasProps> = ({ width, height }) => {
         draggable={false}
       >
         <Layer>
-          {/* Grid */}
-          {Array.from({ length: Math.ceil(width / 20) + 1 }, (_, i) => (
-            <Line
-              key={`v-${i}`}
-              points={[i * 20, 0, i * 20, height]}
-              stroke="hsl(var(--canvas-grid))"
-              strokeWidth={0.5}
-              opacity={0.3}
-            />
-          ))}
-          {Array.from({ length: Math.ceil(height / 20) + 1 }, (_, i) => (
-            <Line
-              key={`h-${i}`}
-              points={[0, i * 20, width, i * 20]}
-              stroke="hsl(var(--canvas-grid))"
-              strokeWidth={0.5}
-              opacity={0.3}
-            />
-          ))}
+          {/* Infinite Grid */}
+          {(() => {
+            const gridSize = 20;
+            const scale = viewport.scale;
+            const offsetX = viewport.x % (gridSize * scale);
+            const offsetY = viewport.y % (gridSize * scale);
+            
+            const startX = -offsetX / scale;
+            const startY = -offsetY / scale;
+            const endX = (width - offsetX) / scale;
+            const endY = (height - offsetY) / scale;
+            
+            const verticalLines = [];
+            const horizontalLines = [];
+            
+            for (let x = startX; x <= endX + gridSize; x += gridSize) {
+              verticalLines.push(
+                <Line
+                  key={`v-${Math.floor(x / gridSize)}`}
+                  points={[x, startY - gridSize, x, endY + gridSize]}
+                  stroke="hsl(var(--canvas-grid))"
+                  strokeWidth={0.5 / scale}
+                  opacity={0.3}
+                />
+              );
+            }
+            
+            for (let y = startY; y <= endY + gridSize; y += gridSize) {
+              horizontalLines.push(
+                <Line
+                  key={`h-${Math.floor(y / gridSize)}`}
+                  points={[startX - gridSize, y, endX + gridSize, y]}
+                  stroke="hsl(var(--canvas-grid))"
+                  strokeWidth={0.5 / scale}
+                  opacity={0.3}
+                />
+              );
+            }
+            
+            return [...verticalLines, ...horizontalLines];
+          })()}
           
           {/* Edges */}
           {edges.map((edge) => (
