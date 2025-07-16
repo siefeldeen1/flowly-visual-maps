@@ -22,16 +22,29 @@ import { useThemeStore } from '@/store/useThemeStore';
 import { AuthDialog } from '@/components/Auth/AuthDialog';
 
 export const Toolbar: React.FC = () => {
-  const { tool, setTool, undo, redo, clear, history, historyIndex } = useCanvasStore();
+  const { tool, setTool, undo, redo, clear, history, historyIndex, isConnecting, addNode } = useCanvasStore();
   const { isDark, toggleTheme } = useThemeStore();
+
+  const handleShapeClick = (shapeType: 'rectangle' | 'ellipse' | 'diamond') => {
+    // Add shape at center of viewport (world coordinates)
+    addNode(shapeType, { x: 100, y: 100 });
+  };
+
+  const handleTextClick = () => {
+    const { addTextNode } = useCanvasStore.getState();
+    addTextNode({ x: 100, y: 100 });
+  };
 
   const tools = [
     { id: 'select', icon: MousePointer, label: 'Select' },
-    { id: 'rectangle', icon: Square, label: 'Rectangle' },
-    { id: 'ellipse', icon: Circle, label: 'Ellipse' },
-    { id: 'diamond', icon: Diamond, label: 'Diamond' },
-    { id: 'text', icon: Type, label: 'Text' },
-    { id: 'line', icon: Minus, label: 'Line' },
+    { id: 'text', icon: Type, label: 'Add Text' },
+    { id: 'line', icon: Minus, label: isConnecting ? 'Click 2 shapes to connect' : 'Connect Shapes' },
+  ] as const;
+
+  const shapes = [
+    { id: 'rectangle', icon: Square, label: 'Add Rectangle' },
+    { id: 'ellipse', icon: Circle, label: 'Add Ellipse' },
+    { id: 'diamond', icon: Diamond, label: 'Add Diamond' },
   ] as const;
 
   const canUndo = historyIndex > 0;
@@ -44,13 +57,37 @@ export const Toolbar: React.FC = () => {
         {tools.map((toolItem) => (
           <Button
             key={toolItem.id}
-            variant={tool === toolItem.id ? 'default' : 'ghost'}
+            variant={tool === toolItem.id || (toolItem.id === 'line' && isConnecting) ? 'default' : 'ghost'}
             size="sm"
-            onClick={() => setTool(toolItem.id as any)}
+            onClick={() => {
+              if (toolItem.id === 'text') {
+                handleTextClick();
+              } else {
+                setTool(toolItem.id as any);
+              }
+            }}
             className="w-9 h-9 p-0"
             title={toolItem.label}
           >
             <toolItem.icon className="w-4 h-4" />
+          </Button>
+        ))}
+      </div>
+
+      <Separator orientation="vertical" className="h-6" />
+
+      {/* Shape creation */}
+      <div className="flex items-center gap-1">
+        {shapes.map((shape) => (
+          <Button
+            key={shape.id}
+            variant="ghost"
+            size="sm"
+            onClick={() => handleShapeClick(shape.id)}
+            className="w-9 h-9 p-0"
+            title={shape.label}
+          >
+            <shape.icon className="w-4 h-4" />
           </Button>
         ))}
       </div>

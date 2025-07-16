@@ -89,14 +89,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     get().saveHistory();
   },
 
-  addTextNode: (textNode: any) => {
+  addTextNode: (position: Point) => {
     const node: Node = {
       id: uuidv4(),
       type: 'text' as NodeType,
-      position: textNode.position,
+      position,
       size: { width: 100, height: 30 },
-      text: textNode.text,
-      fill: textNode.fill,
+      text: 'Click to edit',
+      fill: 'transparent',
       stroke: 'transparent',
       strokeWidth: 0,
     };
@@ -184,11 +184,19 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   // Edge operations
   addEdge: (sourceNodeId: string, targetNodeId: string) => {
-    const { nodes } = get();
+    const { nodes, edges } = get();
     const sourceNode = nodes.find((n) => n.id === sourceNodeId);
     const targetNode = nodes.find((n) => n.id === targetNodeId);
     
     if (!sourceNode || !targetNode) return;
+    
+    // Check if connection already exists
+    const existingConnection = edges.find(edge => 
+      (edge.sourceNodeId === sourceNodeId && edge.targetNodeId === targetNodeId) ||
+      (edge.sourceNodeId === targetNodeId && edge.targetNodeId === sourceNodeId)
+    );
+    
+    if (existingConnection) return; // Don't create duplicate connections
     
     // Calculate anchor points (center of nodes for now)
     const sourceAnchor = {
@@ -213,6 +221,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       edges: [...state.edges, edge],
       isConnecting: false,
       connectionSource: null,
+      tool: 'select', // Return to select tool
     }));
     
     get().saveHistory();
@@ -271,7 +280,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   // Tool operations
   setTool: (tool: CanvasState['tool']) => {
-    set({ tool, isConnecting: false, connectionSource: null });
+    if (tool === 'line') {
+      set({ tool });
+    } else {
+      set({ tool, isConnecting: false, connectionSource: null });
+    }
   },
 
   startConnection: (nodeId: string) => {

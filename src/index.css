@@ -84,11 +84,11 @@
 
     /* Canvas specific colors - dark mode */
     --canvas-bg: 224 71% 4%;
-    --canvas-grid: 215 27% 17%;
-    --node-stroke: 217 10% 40%;
+    --canvas-grid: 215 27% 25%;
+    --node-stroke: 217 10% 50%;
     --node-fill: 215 27% 17%;
-    --connection-line: 259 94% 51%;
-    --selection-box: 259 94% 51%;
+    --connection-line: 259 94% 65%;
+    --selection-box: 259 94% 65%;
     
     /* Gradients - dark mode */
     --gradient-primary: linear-gradient(135deg, hsl(259 94% 51%), hsl(259 94% 61%));

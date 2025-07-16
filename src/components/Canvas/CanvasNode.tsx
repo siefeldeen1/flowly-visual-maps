@@ -3,6 +3,7 @@ import { Group, Rect, Ellipse, Line, Text } from 'react-konva';
 import Konva from 'konva';
 import { Node, Point } from '@/types';
 import { useCanvasStore } from '@/store/useCanvasStore';
+import { ResizeHandles } from './ResizeHandles';
 
 interface CanvasNodeProps {
   node: Node;
@@ -11,7 +12,9 @@ interface CanvasNodeProps {
 
 export const CanvasNode: React.FC<CanvasNodeProps> = ({ node, isSelected }) => {
   const groupRef = useRef<Konva.Group>(null);
+  const textRef = useRef<Konva.Text>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   
   const {
     updateNode,
@@ -22,6 +25,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({ node, isSelected }) => {
     connectionSource,
     endConnection,
     startConnection,
+    tool,
+    viewport,
   } = useCanvasStore();
 
   const handleDragStart = useCallback(() => {
@@ -72,28 +77,101 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({ node, isSelected }) => {
   const handleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true;
     
-    const currentTool = useCanvasStore.getState().tool;
-    
-    if (currentTool === 'line' && !isConnecting) {
-      // Start connection from this node
-      startConnection(node.id);
-    } else if (isConnecting && connectionSource !== node.id) {
-      // Complete connection to this node
-      endConnection(node.id);
-    } else if (e.evt.ctrlKey || e.evt.metaKey) {
-      selectNode(node.id, true);
+    if (tool === 'line') {
+      if (isConnecting && connectionSource) {
+        if (connectionSource !== node.id) {
+          // Check if connection already exists
+          const existingConnection = edges.find(edge => 
+            (edge.sourceNodeId === connectionSource && edge.targetNodeId === node.id) ||
+            (edge.sourceNodeId === node.id && edge.targetNodeId === connectionSource)
+          );
+          
+          if (!existingConnection) {
+            endConnection(node.id);
+          }
+        }
+      } else {
+        startConnection(node.id);
+      }
     } else {
-      selectNode(node.id);
+      selectNode(node.id, e.evt.ctrlKey || e.evt.metaKey);
+      if (node.type === 'text') {
+        setIsEditing(true);
+      }
     }
-  }, [isConnecting, connectionSource, node.id, endConnection, selectNode, startConnection]);
+  }, [tool, isConnecting, connectionSource, node.id, edges, endConnection, selectNode, startConnection]);
 
   const handleDoubleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true;
     
-    if (!isConnecting) {
-      startConnection(node.id);
+    if (node.type !== 'text') {
+      setIsEditing(true);
     }
-  }, [isConnecting, startConnection, node.id]);
+  }, [node.type]);
+
+  const handleTextEdit = useCallback((e: Konva.KonvaEventObject<Event>) => {
+    if (textRef.current) {
+      const textNode = textRef.current;
+      const stage = textNode.getStage();
+      if (!stage) return;
+
+      // Hide text node and create textarea
+      textNode.hide();
+      
+      const textPosition = textNode.absolutePosition();
+      const stageBox = stage.container().getBoundingClientRect();
+      
+      const textarea = document.createElement('textarea');
+      document.body.appendChild(textarea);
+      
+      textarea.value = node.text || '';
+      textarea.style.position = 'absolute';
+      textarea.style.top = (stageBox.top + textPosition.y) + 'px';
+      textarea.style.left = (stageBox.left + textPosition.x) + 'px';
+      textarea.style.width = (node.size.width * viewport.scale) + 'px';
+      textarea.style.height = (node.size.height * viewport.scale) + 'px';
+      textarea.style.fontSize = (14 * viewport.scale) + 'px';
+      textarea.style.border = '2px solid hsl(var(--primary))';
+      textarea.style.padding = '4px';
+      textarea.style.margin = '0px';
+      textarea.style.overflow = 'hidden';
+      textarea.style.background = 'hsl(var(--background))';
+      textarea.style.color = 'hsl(var(--foreground))';
+      textarea.style.outline = 'none';
+      textarea.style.resize = 'none';
+      textarea.style.textAlign = 'center';
+      textarea.style.fontFamily = 'Arial';
+      textarea.style.transformOrigin = 'left top';
+      textarea.style.transform = `scale(${viewport.scale})`;
+      
+      textarea.focus();
+      textarea.select();
+      
+      const removeTextarea = () => {
+        textarea.parentNode?.removeChild(textarea);
+        textNode.show();
+        setIsEditing(false);
+      };
+      
+      textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          updateNode(node.id, { text: textarea.value });
+          removeTextarea();
+        } else if (e.key === 'Escape') {
+          removeTextarea();
+        }
+      });
+      
+      textarea.addEventListener('blur', () => {
+        updateNode(node.id, { text: textarea.value });
+        removeTextarea();
+      });
+    }
+  }, [node, updateNode, viewport.scale]);
+
+  const handleResize = useCallback((newSize: { width: number; height: number }) => {
+    updateNode(node.id, { size: newSize });
+  }, [node.id, updateNode]);
 
   const getNodeAnchor = (fromNode: Node, toNode: Node): Point => {
     const fromCenter = {
@@ -133,9 +211,9 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({ node, isSelected }) => {
     const shapeProps = {
       width: node.size.width,
       height: node.size.height,
-      fill: node.fill,
-      stroke: isSelected ? 'hsl(var(--primary))' : node.stroke,
-      strokeWidth: isSelected ? 3 : node.strokeWidth,
+      fill: node.fill || 'hsl(var(--node-fill))',
+      stroke: isSelected ? 'hsl(var(--primary))' : (node.stroke || 'hsl(var(--node-stroke))'),
+      strokeWidth: (node.strokeWidth || 2) * (isSelected ? 1.5 : 1),
     };
 
     switch (node.type) {
@@ -186,7 +264,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({ node, isSelected }) => {
       ref={groupRef}
       x={node.position.x}
       y={node.position.y}
-      draggable
+      draggable={tool === 'select'}
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
@@ -197,7 +275,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({ node, isSelected }) => {
       {renderShape()}
       
       <Text
-        text={node.text}
+        ref={textRef}
+        text={node.text || 'Text'}
         x={0}
         y={0}
         width={node.size.width}
@@ -209,50 +288,15 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({ node, isSelected }) => {
         fill="hsl(var(--foreground))"
         wrap="word"
         ellipsis
+        onDblClick={handleTextEdit}
       />
       
-      {/* Selection handles */}
-      {isSelected && (
-        <>
-          {/* Corner handles for resizing */}
-          <Rect
-            x={-4}
-            y={-4}
-            width={8}
-            height={8}
-            fill="hsl(var(--primary))"
-            stroke="hsl(var(--background))"
-            strokeWidth={1}
-          />
-          <Rect
-            x={node.size.width - 4}
-            y={-4}
-            width={8}
-            height={8}
-            fill="hsl(var(--primary))"
-            stroke="hsl(var(--background))"
-            strokeWidth={1}
-          />
-          <Rect
-            x={-4}
-            y={node.size.height - 4}
-            width={8}
-            height={8}
-            fill="hsl(var(--primary))"
-            stroke="hsl(var(--background))"
-            strokeWidth={1}
-          />
-          <Rect
-            x={node.size.width - 4}
-            y={node.size.height - 4}
-            width={8}
-            height={8}
-            fill="hsl(var(--primary))"
-            stroke="hsl(var(--background))"
-            strokeWidth={1}
-          />
-        </>
-      )}
+      <ResizeHandles
+        node={node}
+        isSelected={isSelected}
+        onResize={handleResize}
+        viewport={viewport}
+      />
     </Group>
   );
 };
